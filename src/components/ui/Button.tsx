@@ -1,0 +1,33 @@
+import React from 'react';
+import { cn } from '../../utils/cn';
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = 'primary', size = 'md', ...props }, ref) => {
+    return (
+      <button
+        ref={ref}
+        className={cn(
+          'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-white',
+          {
+            'bg-slate-900 text-white hover:bg-slate-800': variant === 'primary',
+            'bg-slate-100 text-slate-900 hover:bg-slate-200': variant === 'secondary',
+            'bg-red-500 text-white hover:bg-red-600': variant === 'danger',
+            'hover:bg-slate-100 hover:text-slate-900': variant === 'ghost',
+            'border border-slate-200 hover:bg-slate-100 hover:text-slate-900': variant === 'outline',
+            'h-9 px-3': size === 'sm',
+            'h-10 py-2 px-4': size === 'md',
+            'h-11 px-8': size === 'lg',
+          },
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+Button.displayName = 'Button';
