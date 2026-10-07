@@ -1,77 +1,66 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { cn } from '../../utils/cn';
-import {
-  LayoutDashboard,
-  Car,
-  Users,
-  UserSquare2,
-  CalendarDays,
-  Map,
-  Activity,
-  ShieldAlert,
-  PhoneCall,
-  BellRing,
-  Wrench,
-  FileBarChart,
-  Database,
-  Settings
-} from 'lucide-react';
+import { ShieldCheck, LayoutDashboard, Car, Users, Navigation, AlertTriangle, Database, FileText, UserCog, Menu } from "lucide-react";
 
-const navigation = [
-  { name: 'Dashboard', to: '/', icon: LayoutDashboard },
-  { name: 'Fleet', to: '/fleet', icon: Car },
-  { name: 'Drivers', to: '/drivers', icon: Users },
-  { name: 'Passengers', to: '/passengers', icon: UserSquare2 },
-  { name: 'Bookings', to: '/bookings', icon: CalendarDays },
-  { name: 'Trips', to: '/trips', icon: Map },
-  { name: 'Monitoring', to: '/monitoring', icon: Activity },
-  { name: 'Safety Events', to: '/safety-events', icon: ShieldAlert },
-  { name: 'SOS', to: '/sos', icon: PhoneCall },
-  { name: 'Alerts', to: '/alerts', icon: BellRing },
-  { name: 'Maintenance', to: '/maintenance', icon: Wrench },
-  { name: 'Reports', to: '/reports', icon: FileBarChart },
-  { name: 'Database', to: '/database', icon: Database },
-  { name: 'Settings', to: '/settings', icon: Settings },
+const links = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/monitoring', icon: Navigation, label: 'Live Map' },
+  { to: '/fleet', icon: Car, label: 'Fleet' },
+  { to: '/drivers', icon: UserCog, label: 'Drivers' },
+  { to: '/passengers', icon: Users, label: 'Passengers' },
+  { to: '/events', icon: AlertTriangle, label: 'Safety Events' },
+  { to: '/sos', icon: ShieldCheck, label: 'SOS Alerts' },
+  { to: '/reports', icon: FileText, label: 'Reports' },
+  { to: '/database', icon: Database, label: 'DB Overview' },
 ];
 
-export function Sidebar() {
+export default function Sidebar() {
   return (
-    <div className="flex h-full w-64 flex-col bg-slate-900 border-r border-slate-800">
-      <div className="flex h-16 items-center px-6 border-b border-slate-800">
-        <Car className="h-6 w-6 text-blue-500 mr-2" />
-        <span className="text-xl font-bold text-white tracking-tight">CabSafe</span>
+    <div className="w-64 h-screen bg-text-main border-r border-text-main flex flex-col fixed left-0 top-0 shadow-2xl">
+      <div className="h-20 flex items-center px-6 border-b border-white/10 bg-[#171d24]">
+        <div className="bg-primary p-2 rounded-xl mr-3 shadow-lg">
+          <ShieldCheck className="h-6 w-6 text-white" />
+        </div>
+        <span className="text-2xl font-extrabold text-white tracking-tight">CabSafe</span>
       </div>
       
-      <div className="flex-1 overflow-y-auto py-4">
-        <nav className="space-y-1 px-3">
-          {navigation.map((item) => (
+      <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2 bg-[#1e2630]">
+        <div className="text-xs font-bold text-white/40 uppercase tracking-widest mb-4 px-2">Operations Center</div>
+        {links.map((link) => {
+          const Icon = link.icon;
+          return (
             <NavLink
-              key={item.name}
-              to={item.to}
+              key={link.to}
+              to={link.to}
               className={({ isActive }) =>
-                cn(
-                  'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                `flex items-center px-4 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${
                   isActive
-                    ? 'bg-slate-800 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                )
+                    ? 'bg-primary text-white shadow-md border border-primary-light/20'
+                    : 'text-white/70 hover:bg-white/5 hover:text-white'
+                }`
               }
             >
-              <item.icon
-                className="mr-3 h-5 w-5 flex-shrink-0"
-                aria-hidden="true"
-              />
-              {item.name}
+              {({ isActive }) => (
+                <>
+                  <Icon className={`h-5 w-5 mr-3 transition-colors ${isActive ? 'text-white' : 'text-white/50'}`} />
+                  {link.label}
+                  {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>}
+                </>
+              )}
             </NavLink>
-          ))}
-        </nav>
+          );
+        })}
       </div>
       
-      <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center space-x-3 text-sm text-slate-400">
-          <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          <span>System Online</span>
+      <div className="p-4 border-t border-white/10 bg-[#171d24]">
+        <div className="flex items-center px-3 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors cursor-pointer">
+          <div className="h-10 w-10 rounded-full bg-teal flex items-center justify-center text-white font-bold text-sm shadow-inner border border-teal-light/30">
+            AD
+          </div>
+          <div className="ml-3">
+            <p className="text-sm font-bold text-white leading-tight">Admin User</p>
+            <p className="text-xs text-white/50 font-medium">Fleet Manager</p>
+          </div>
         </div>
       </div>
     </div>

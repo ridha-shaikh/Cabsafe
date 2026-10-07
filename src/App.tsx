@@ -1,5 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
+import { useSimulationStore } from './store/simulationStore';
+import { SimulationState } from './types/enums';
+import { simulationEngine } from './simulation/SimulationEngine';
 import AppLayout from './components/layout/AppLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -21,6 +25,14 @@ import SettingsPage from './pages/SettingsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      useSimulationStore.getState().setConfig({ state: SimulationState.RUNNING });
+      simulationEngine.start();
+    }
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }

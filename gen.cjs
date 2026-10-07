@@ -1,13 +1,16 @@
-import React from 'react';
+const fs = require('fs');
+const pages = ['PassengersPage', 'BookingsPage', 'TripsPage', 'SOSPage', 'AlertsPage', 'MaintenancePage', 'ReportsPage', 'DatabaseOverviewPage', 'DriversPage'];
+
+const template = `import React from 'react';
 import PageContainer from '../components/layout/PageContainer';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 
-export default function AlertsPage() {
+export default function __NAME__() {
   return (
-    <PageContainer title="Alerts" description="Operations and monitoring for alerts.">
+    <PageContainer title="__TITLE__" description="Operations and monitoring for __LOWER__.">
       <Card className="bg-surface border-border shadow-sm">
          <CardHeader className="border-b border-border bg-background">
-            <CardTitle className="text-base font-extrabold text-text-main">Alerts Overview</CardTitle>
+            <CardTitle className="text-base font-extrabold text-text-main">__TITLE__ Overview</CardTitle>
          </CardHeader>
          <CardContent className="p-12 flex flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-background rounded-full mb-4 flex items-center justify-center border border-border shadow-sm">
@@ -19,4 +22,11 @@ export default function AlertsPage() {
       </Card>
     </PageContainer>
   );
-}
+}`;
+
+pages.forEach(p => {
+   const title = p.replace('Page', '').replace(/([A-Z])/g, ' $1').trim();
+   const content = template.replace(/__NAME__/g, p).replace(/__TITLE__/g, title).replace(/__LOWER__/g, title.toLowerCase());
+   fs.writeFileSync('src/pages/' + p + '.tsx', content);
+});
+console.log('Done');
