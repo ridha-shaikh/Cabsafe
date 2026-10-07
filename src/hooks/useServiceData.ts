@@ -1,8 +1,14 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export function useServiceData<T>(fetchFn: () => Promise<T[]>) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Keep the latest fetchFn in a ref to avoid triggering useEffect on every render
+  const fetchFnRef = React.useRef(fetchFn);
+  useEffect(() => {
+    fetchFnRef.current = fetchFn;
+  }, [fetchFn]);
 
   useEffect(() => {
     let mounted = true;
@@ -10,7 +16,7 @@ export function useServiceData<T>(fetchFn: () => Promise<T[]>) {
     const load = async () => {
       try {
         setLoading(true);
-        const result = await fetchFn();
+        const result = await fetchFnRef.current();
         if (mounted) setData(result);
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -28,7 +34,7 @@ export function useServiceData<T>(fetchFn: () => Promise<T[]>) {
       mounted = false;
       clearInterval(interval);
     };
-  }, [fetchFn]);
+  }, []); // Empty dependency array prevents infinite loops
 
   return { data, loading };
 }

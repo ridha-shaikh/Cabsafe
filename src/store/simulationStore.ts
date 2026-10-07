@@ -9,6 +9,7 @@ interface SimulationStore {
   
   setConfig: (config: Partial<SimulationConfig>) => void;
   updateCab: (cabId: string, state: Partial<CabSimulationState>) => void;
+  batchUpdateCabs: (updates: Record<string, Partial<CabSimulationState>>) => void;
   removeCab: (cabId: string) => void;
   resetSimulation: () => void;
 }
@@ -68,6 +69,52 @@ export const useSimulationStore = create<SimulationStore>((set) => ({
           [cabId]: updatedCab,
         },
       };
+    }),
+    
+  batchUpdateCabs: (updates) =>
+    set((state) => {
+      const newCabs = { ...state.cabs };
+      
+      for (const [cabId, cabState] of Object.entries(updates)) {
+        const updatedCab = {
+          ...(state.cabs[cabId] || {
+            cabId,
+            driverId: '',
+            routeId: '',
+            state: CabSimState.IDLE,
+            latitude: 0,
+            longitude: 0,
+            heading: 0,
+            distanceTraveledKm: 0,
+            routeProgress: 0,
+            currentSpeed: 0,
+            targetSpeed: 0,
+            acceleration: 0,
+            brakeApplied: false,
+            lastTickTime: Date.now(),
+            timeInCurrentState: 0,
+            isOffRoute: false,
+          }),
+          ...cabState,
+        };
+        
+        newCabs[cabId] = updatedCab;
+
+        // Also sync to Mock Database to maintain AWS-ready architecture
+        const dbCabIndex = mockDatabase.cabs.findIndex((c: any) => c.cabId === cabId);
+        if (dbCabIndex !== -1) {
+          mockDatabase.cabs[dbCabIndex] = {
+            ...mockDatabase.cabs[dbCabIndex],
+            currentLatitude: updatedCab.latitude,
+            currentLongitude: updatedCab.longitude,
+            currentSpeed: updatedCab.currentSpeed,
+            // map states roughly
+            status: updatedCab.state === CabSimState.IDLE ? CabStatus.IDLE : CabStatus.ACTIVE,
+          };
+        }
+      }
+      
+      return { cabs: newCabs };
     }),
     
   removeCab: (cabId) =>

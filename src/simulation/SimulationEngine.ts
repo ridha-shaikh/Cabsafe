@@ -51,10 +51,23 @@ class SimulationEngine {
     const dtSeconds = (now - this.lastTickMs) / 1000 * config.speedMultiplier;
     this.lastTickMs = now;
     
-    // Update existing cabs
     const cabs = store.cabs;
+    const updates: Record<string, any> = {};
+    const cabsToRemove: string[] = [];
+
+    // Update existing cabs
     for (const cabId of Object.keys(cabs)) {
-      this.updateCabPhysicsAndRoute(cabId, dtSeconds, now);
+      this.updateCabPhysicsAndRoute(cabId, dtSeconds, now, updates, cabsToRemove);
+    }
+    
+    // Apply batched updates
+    if (Object.keys(updates).length > 0) {
+      store.batchUpdateCabs(updates);
+    }
+    
+    // Apply removals
+    for (const cabId of cabsToRemove) {
+      store.removeCab(cabId);
     }
     
     // Spawn / Retire logic
@@ -96,7 +109,6 @@ class SimulationEngine {
     const route = CHENNAI_ROUTES[Math.floor(Math.random() * CHENNAI_ROUTES.length)];
     
     const waypoints = route.waypointsJson.map(wp => [wp.lng, wp.lat] as [number, number]);
-    const routeLength = getRouteLength(waypoints);
     
     const startPoint = waypoints[0];
     
@@ -134,7 +146,7 @@ class SimulationEngine {
     store.removeCab(cabId);
   }
 
-  private updateCabPhysicsAndRoute(cabId: string, dtSeconds: number, now: number) {
+  private updateCabPhysicsAndRoute(cabId: string, dtSeconds: number, now: number, updates: Record<string, any>, cabsToRemove: string[]) {
     const store = useSimulationStore.getState();
     const cab = store.cabs[cabId];
     if (!cab || cab.state === CabSimState.IDLE || cab.state === CabSimState.OFFLINE) return;
@@ -142,19 +154,19 @@ class SimulationEngine {
     // Handle pause
     if (cab.pauseRemainingMs > 0) {
       const remaining = cab.pauseRemainingMs - (dtSeconds * 1000);
-      store.updateCab(cabId, {
+      updates[cabId] = {
         pauseRemainingMs: Math.max(0, remaining),
         currentSpeed: 0,
         acceleration: 0,
         brakeApplied: true,
         lastTickTime: now
-      });
+      };
       return;
     }
     
     if (cab.state === CabSimState.ARRIVED) {
       if (now - cab.lastTickTime > 3000) { // Rest for 3s then retire to spawn anew
-         store.removeCab(cabId);
+         cabsToRemove.push(cabId);
       }
       return;
     }
@@ -166,13 +178,13 @@ class SimulationEngine {
     const totalLength = getRouteLength(waypoints);
 
     if (cab.currentWaypointIndex >= waypoints.length) {
-       store.updateCab(cabId, { state: CabSimState.ARRIVED, currentSpeed: 0, lastTickTime: now });
+       updates[cabId] = { state: CabSimState.ARRIVED, currentSpeed: 0, lastTickTime: now };
        return;
     }
 
     // Occasional pause logic (2% chance to stop for 2-5 seconds)
     if (Math.random() < 0.02) {
-       store.updateCab(cabId, { pauseRemainingMs: 2000 + Math.random() * 3000, lastTickTime: now });
+       updates[cabId] = { pauseRemainingMs: 2000 + Math.random() * 3000, lastTickTime: now };
        return;
     }
     
@@ -190,7 +202,6 @@ class SimulationEngine {
     const progress = Math.min(1, newDistanceTraveled / totalLength);
     
     let point = getPointAtDistance(waypoints, newDistanceTraveled);
-    let prevTruePoint = getPointAtDistance(waypoints, cab.distanceTraveledKm);
     
     // Tiny positional noise (reduced to prevent visual jumping)
     const latNoise = (Math.random() - 0.5) * 0.00002;
@@ -223,7 +234,7 @@ class SimulationEngine {
     else if (accel < -3.5) newState = CabSimState.HARSH_BRAKE;
     else if (accel > 3.5) newState = CabSimState.SUDDEN_ACCEL;
     
-    store.updateCab(cabId, {
+    updates[cabId] = {
       latitude: finalLat,
       longitude: finalLng,
       heading: newHeading,
@@ -236,7 +247,7 @@ class SimulationEngine {
       lastTickTime: now,
       timeInCurrentState: cab.state === newState ? cab.timeInCurrentState + dtSeconds * 1000 : 0,
       currentWaypointIndex: cab.currentWaypointIndex // Just simple point tracking
-    });
+    };
     
     anomalyDetector.detectAnomalies(cabId, newSpeed, accel, now);
   }

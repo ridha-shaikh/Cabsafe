@@ -17,7 +17,7 @@ export interface DriverDetail {
   driver: import('./entities').Driver;
   safetyScore: import('./entities').SafetyScore;
   recentTrips: import('./entities').Trip[];
-  recentEvents: import('./entities').DriverBehaviourEvent[];
+  recentEvents: import('./entities').SafetyEvent[];
 }
 
 export interface CabDetail {
@@ -40,7 +40,7 @@ export interface TripDetail {
   cab: import('./entities').Cab;
   driver: import('./entities').Driver;
   passenger: import('./entities').Passenger;
-  events: import('./entities').DriverBehaviourEvent[];
+  events: import('./entities').SafetyEvent[];
   route?: import('./entities').Route;
   telemetryHistory: import('./telemetry').Telemetry[];
   rating?: import('./entities').DriverRating;
