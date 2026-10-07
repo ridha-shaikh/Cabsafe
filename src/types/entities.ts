@@ -134,7 +134,7 @@ export interface Trip {
   createdAt: string;
 }
 
-export interface DriverBehaviourEvent {
+export interface SafetyEvent {
   eventId: string;
   cabId: string;
   driverId: string;

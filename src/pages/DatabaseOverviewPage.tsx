@@ -1,22 +1,29 @@
 import React from 'react';
 import PageContainer from '../components/layout/PageContainer';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { mockDatabase } from '../repositories/mock/mockDatabase';
 
 export default function DatabaseOverviewPage() {
+  const tables = Object.keys(mockDatabase).map(key => ({
+    name: key,
+    count: (mockDatabase as any)[key].length
+  }));
+
   return (
-    <PageContainer title="Database Overview" description="Operations and monitoring for database overview.">
-      <Card className="bg-surface border-border shadow-sm">
-         <CardHeader className="border-b border-border bg-background">
-            <CardTitle className="text-base font-extrabold text-text-main">Database Overview Overview</CardTitle>
-         </CardHeader>
-         <CardContent className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-background rounded-full mb-4 flex items-center justify-center border border-border shadow-sm">
-               <svg className="w-8 h-8 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-            </div>
-            <h3 className="text-xl font-extrabold text-text-main mb-2">No active records</h3>
-            <p className="text-text-secondary font-medium">The simulation engine is populating data for this section.</p>
-         </CardContent>
-      </Card>
+    <PageContainer title="Database Overview" description="Schema and row counts for the local Mock DB.">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tables.map(t => (
+          <Card key={t.name} className="bg-surface border-border shadow-sm">
+             <CardHeader className="border-b border-border bg-background">
+                <CardTitle className="text-base font-extrabold capitalize text-text-main">{t.name}</CardTitle>
+             </CardHeader>
+             <CardContent className="p-6">
+                <div className="text-3xl font-extrabold text-brand-primary">{t.count}</div>
+                <div className="text-sm font-medium text-text-secondary mt-1">Rows in table</div>
+             </CardContent>
+          </Card>
+        ))}
+      </div>
     </PageContainer>
   );
 }

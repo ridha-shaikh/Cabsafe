@@ -1,20 +1,40 @@
 import React from 'react';
 import PageContainer from '../components/layout/PageContainer';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
+import { useServiceData } from '../hooks/useServiceData';
+import { bookingService } from '../services';
 
 export default function BookingsPage() {
+  const { data, loading } = useServiceData(() => bookingService.getAll());
+
   return (
-    <PageContainer title="Bookings" description="Operations and monitoring for bookings.">
+    <PageContainer title="Bookings" description="View and manage booking records.">
       <Card className="bg-surface border-border shadow-sm">
          <CardHeader className="border-b border-border bg-background">
             <CardTitle className="text-base font-extrabold text-text-main">Bookings Overview</CardTitle>
          </CardHeader>
-         <CardContent className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-background rounded-full mb-4 flex items-center justify-center border border-border shadow-sm">
-               <svg className="w-8 h-8 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-            </div>
-            <h3 className="text-xl font-extrabold text-text-main mb-2">No active records</h3>
-            <p className="text-text-secondary font-medium">The simulation engine is populating data for this section.</p>
+         <CardContent className="p-0">
+            {loading && data.length === 0 ? (
+               <div className="p-8 text-center text-text-secondary">Loading data...</div>
+            ) : data.length === 0 ? (
+               <div className="p-8 text-center text-text-secondary">No records found.</div>
+            ) : (
+               <Table>
+                 <TableHeader>
+                   <TableRow>
+                     <TableHead className="capitalize">booking Id</TableHead><TableHead className="capitalize">passenger Id</TableHead><TableHead className="capitalize">status</TableHead><TableHead className="capitalize">fare Estimate</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {data.map((row, i) => (
+                     <TableRow key={i}>
+                       <TableCell>{String(row.bookingId)}</TableCell><TableCell>{String(row.passengerId)}</TableCell><TableCell>{String(row.status)}</TableCell><TableCell>{String(row.fareEstimate)}</TableCell>
+                     </TableRow>
+                   ))}
+                 </TableBody>
+               </Table>
+            )}
          </CardContent>
       </Card>
     </PageContainer>
