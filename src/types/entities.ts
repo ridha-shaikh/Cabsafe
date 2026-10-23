@@ -2,6 +2,7 @@ import {
   UserRole,
   DriverStatus,
   CabStatus,
+  VehicleType,
   FuelType,
   BookingStatus,
   TripStatus,
@@ -62,6 +63,7 @@ export interface Cab {
   cabId: string;
   registrationNumber: string;
   model: string;
+  vehicleType?: VehicleType;
   makeYear: number;
   color: string;
   fuelType: FuelType;

@@ -20,6 +20,19 @@ export class CabService {
     return this.repository.update(id, data);
   }
 
+  async batchUpdate(cabs: Array<{
+    cabId: string;
+    status?: any;
+    currentLatitude?: number;
+    currentLongitude?: number;
+    currentSpeed?: number;
+    mileageKm?: number;
+  }>): Promise<void> {
+    if (this.repository.batchUpdate) {
+      return this.repository.batchUpdate(cabs);
+    }
+  }
+
   async delete(id: string): Promise<boolean> {
     return this.repository.delete(id);
   }

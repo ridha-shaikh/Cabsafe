@@ -4,8 +4,15 @@ export interface CabSimulationState {
   cabId: string;
   driverId: string;
   tripId?: string;
+  bookingId?: string;
+  passengerId?: string;
   routeId: string;
+  isReverse: boolean;
+  startLocationName: string;
+  destinationLocationName: string;
   state: CabSimState;
+  routePhase: 'DISPATCH' | 'PICKUP_DWELL' | 'TRIP' | 'DROPOFF_DWELL' | 'COMPLETED';
+  dwellTimer: number;
   
   // Positional Data
   latitude: number;
@@ -13,6 +20,7 @@ export interface CabSimulationState {
   heading: number;
   
   // Route Progress
+  totalRouteDistance: number;
   distanceTraveledKm: number;
   routeProgress: number; // 0 to 1
   currentWaypointIndex: number;
@@ -32,6 +40,12 @@ export interface CabSimulationState {
   // Event tracking
   isOffRoute: boolean;
   activeEventId?: string;
+
+  // Anomaly injection state (managed by SimulationEngine)
+  activeAnomalyType?: 'OVER_SPEEDING' | 'HARSH_BRAKE' | 'SUDDEN_ACCEL' | 'SOS' | null;
+  anomalyStartMs?: number;
+  anomalyDurationMs?: number;
+  anomalyTargetSpeed?: number;
 }
 
 export interface SimulationConfig {

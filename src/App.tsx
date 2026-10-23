@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import React, { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useSimulationStore } from './store/simulationStore';
@@ -20,12 +20,12 @@ import SOSPage from './pages/SOSPage';
 import AlertsPage from './pages/AlertsPage';
 import MaintenancePage from './pages/MaintenancePage';
 import ReportsPage from './pages/ReportsPage';
-import DatabaseOverviewPage from './pages/DatabaseOverviewPage';
+import TelemetryMonitorPage from './pages/TelemetryMonitorPage';
 import SettingsPage from './pages/SettingsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  
+
   useEffect(() => {
     if (isAuthenticated) {
       useSimulationStore.getState().setConfig({ state: SimulationState.RUNNING });
@@ -58,11 +58,13 @@ export default function App() {
                   <Route path="/trips/:id" element={<TripDetailPage />} />
                   <Route path="/monitoring" element={<LiveMonitoringPage />} />
                   <Route path="/safety-events" element={<SafetyEventsPage />} />
+                  <Route path="/events" element={<SafetyEventsPage />} />
                   <Route path="/sos" element={<SOSPage />} />
                   <Route path="/alerts" element={<AlertsPage />} />
                   <Route path="/maintenance" element={<MaintenancePage />} />
                   <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/database" element={<DatabaseOverviewPage />} />
+                  <Route path="/telemetry-monitor" element={<TelemetryMonitorPage />} />
+
                   <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </AppLayout>

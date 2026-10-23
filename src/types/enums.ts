@@ -25,6 +25,13 @@ export enum CabStatus {
   RETIRED = 'RETIRED',
 }
 
+export enum VehicleType {
+  SEDAN = 'SEDAN',
+  HATCHBACK = 'HATCHBACK',
+  SUV = 'SUV',
+  MPV = 'MPV',
+}
+
 export enum FuelType {
   PETROL = 'PETROL',
   DIESEL = 'DIESEL',
@@ -167,9 +174,12 @@ export enum SimulationState {
 }
 
 export enum CabSimState {
-  IDLE = 'IDLE',
-  EN_ROUTE = 'EN_ROUTE',
+  AVAILABLE = 'AVAILABLE',
+  GOING_TO_PICKUP = 'GOING_TO_PICKUP',
+  ARRIVED_PICKUP = 'ARRIVED_PICKUP',
+  ON_TRIP = 'ON_TRIP',
   ARRIVED = 'ARRIVED',
+  COMPLETED = 'COMPLETED',
   SPEEDING = 'SPEEDING',
   HARSH_BRAKE = 'HARSH_BRAKE',
   SUDDEN_ACCEL = 'SUDDEN_ACCEL',

@@ -4,7 +4,7 @@ import { mockDatabase } from './mockDatabase';
 
 export class MockSOSRequestRepository implements ISOSRequestRepository {
   private getTable(): SOSRequest[] {
-    return mockDatabase['sOSRequests'] as SOSRequest[];
+    return mockDatabase.sosRequests as SOSRequest[];
   }
 
   async getAll(): Promise<SOSRequest[]> {
@@ -12,7 +12,7 @@ export class MockSOSRequestRepository implements ISOSRequestRepository {
   }
 
   async getById(id: string): Promise<SOSRequest | null> {
-    const item = this.getTable().find((x: any) => x['sosrequestId'] === id || x.id === id);
+    const item = this.getTable().find((x: any) => x.sosId === id || x.id === id);
     return item ? { ...item } : null;
   }
 
@@ -27,7 +27,7 @@ export class MockSOSRequestRepository implements ISOSRequestRepository {
 
   async update(id: string, data: Partial<SOSRequest>): Promise<SOSRequest | null> {
     const table = this.getTable();
-    const index = table.findIndex((x: any) => x['sosrequestId'] === id || x.id === id);
+    const index = table.findIndex((x: any) => x.sosId === id || x.id === id);
     if (index === -1) return null;
     
     table[index] = { ...table[index], ...data };
@@ -36,7 +36,7 @@ export class MockSOSRequestRepository implements ISOSRequestRepository {
 
   async delete(id: string): Promise<boolean> {
     const table = this.getTable();
-    const index = table.findIndex((x: any) => x['sosrequestId'] === id || x.id === id);
+    const index = table.findIndex((x: any) => x.sosId === id || x.id === id);
     if (index === -1) return false;
     
     table.splice(index, 1);

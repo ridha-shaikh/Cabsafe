@@ -1,21 +1,32 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import Map, { Marker } from 'react-map-gl';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { StatCard } from '../components/charts/StatCard';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { useSimulationStore } from '../store/simulationStore';
+import { useAuthStore } from '../store/authStore';
 import { Car, AlertTriangle, ShieldAlert, Navigation, Wrench, Activity, ShieldCheck, MapPin } from 'lucide-react';
 import { SimulationState, CabSimState } from '../types/enums';
 import { MAP_CONFIG } from '../config/mapConfig';
+import { isActiveTripCab } from '../utils/fleetUtils';
 
 export default function DashboardPage() {
   const { cabs, config } = useSimulationStore();
+  const { user } = useAuthStore();
   const cabList = Object.values(cabs);
-  
-  const activeCabs = cabList.filter(c => c.state === CabSimState.EN_ROUTE || c.state === CabSimState.SPEEDING).length;
+  const activeCabsList = useMemo(() => cabList.filter(isActiveTripCab), [cabList]);
+
+  const currentHour = new Date().getHours();
+  const greeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
+  const username = user?.name || 'User';
+
+  const activeCabs = activeCabsList.length;
   const eventsCount = cabList.filter(c => c.activeEventId).length;
-  
+  const { sosRequests, safetyEvents } = useSimulationStore();
+  const activeSosCount = sosRequests.filter(s => s.status === 'ACTIVE' || s.status === 'RESPONDING').length;
+  const maintenanceCabs = cabList.filter(c => c.state === 'MAINTENANCE').length;
+
   const [activities, setActivities] = useState<any[]>([]);
   useEffect(() => {
     if(cabList.length > 0 && Math.random() > 0.6) {
@@ -30,7 +41,7 @@ export default function DashboardPage() {
        };
        setActivities(prev => [newAct, ...prev].slice(0, 6));
     }
-  }, [cabList.length, Math.floor(Date.now() / 2500)]);
+  }, [cabList.length]);
 
   const mapCenter = useMemo(() => ({
     longitude: MAP_CONFIG.defaultCenter.longitude,
@@ -40,8 +51,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
-      
-      {/* 1. HERO - Atmospheric Ombré (Matching Login) */}
+
+      {/* 1. HERO - Atmospheric OmbrÃ© (Matching Login) */}
       <div className="rounded-3xl p-10 text-white shadow-xl relative overflow-hidden flex justify-between items-end" style={{ backgroundImage: 'linear-gradient(135deg, #091221 0%, #113645 50%, #0d4a46 100%)' }}>
         <div className="absolute top-0 right-0 opacity-10 w-96 h-96 -mr-20 -mt-20 pointer-events-none">
           <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -49,7 +60,9 @@ export default function DashboardPage() {
           </svg>
         </div>
         <div className="relative z-10">
-          <h1 className="text-4xl font-extrabold tracking-tight mb-2">Good afternoon, Admin</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight mb-2">
+            {greeting}, {username}
+          </h1>
           <p className="text-white/80 text-xl font-medium">Your fleet is operating safely.</p>
         </div>
         <div className="relative z-10 bg-white/10 backdrop-blur-md px-5 py-3 rounded-xl border border-white/20 flex items-center shadow-inner">
@@ -65,12 +78,12 @@ export default function DashboardPage() {
         <StatCard title="Active Trips" value={activeCabs} icon={<Navigation className="h-6 w-6" />} variant="sage" />
         <StatCard title="Active Fleet" value={cabList.length} icon={<Car className="h-6 w-6" />} variant="teal" />
         <StatCard title="Safety Alerts" value={eventsCount} icon={<AlertTriangle className="h-6 w-6" />} variant="amber" />
-        <StatCard title="Active SOS" value="0" icon={<ShieldAlert className="h-6 w-6" />} variant="coral" />
-        <StatCard title="Maintenance" value="5" icon={<Wrench className="h-6 w-6" />} variant="peach" />
+        <StatCard title="Active SOS" value={activeSosCount} icon={<ShieldAlert className="h-6 w-6" />} variant="coral" />
+        <StatCard title="Maintenance" value={maintenanceCabs} icon={<Wrench className="h-6 w-6" />} variant="peach" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* 3. LARGE LIVE MAP */}
         <Card className="lg:col-span-2 h-[450px] flex flex-col border-border shadow-sm overflow-hidden bg-surface">
           <CardHeader className="border-b border-border pb-4 bg-background">
@@ -81,10 +94,12 @@ export default function DashboardPage() {
           </CardHeader>
           <div className="flex-1 relative">
             <Map initialViewState={mapCenter} mapStyle={MAP_CONFIG.styleUrl} mapLib={maplibregl as any} attributionControl={false} interactive={false}>
-              {cabList.map((cab) => {
+              {activeCabsList.map((cab) => {
                 const statusColors: Record<string, string> = {
-                  [CabSimState.IDLE]: '#3B8EA5',
-                  [CabSimState.EN_ROUTE]: '#4A7C59',
+                  [CabSimState.AVAILABLE]: '#3B8EA5',
+                  [CabSimState.GOING_TO_PICKUP]: '#F4A261',
+                  [CabSimState.ARRIVED_PICKUP]: '#E9C46A',
+                  [CabSimState.ON_TRIP]: '#4A7C59',
                   [CabSimState.SPEEDING]: '#D99A38',
                   [CabSimState.HARSH_BRAKE]: '#D99A38',
                   [CabSimState.SUDDEN_ACCEL]: '#D99A38',
@@ -92,17 +107,17 @@ export default function DashboardPage() {
                   [CabSimState.OFFLINE]: '#888888',
                 };
                 const cabColor = statusColors[cab.state] || '#888888';
-                
+
                 return (
                   <Marker key={cab.cabId} longitude={cab.longitude} latitude={cab.latitude} anchor="center" pitchAlignment="map" rotationAlignment="map">
                     <div className="relative flex items-center justify-center transition-transform duration-300">
-                      <div 
+                      <div
                          className="absolute rounded-full"
-                         style={{ 
+                         style={{
                            width: '24px', height: '24px',
                            backgroundColor: `${cabColor}33`,
                            border: `1.5px solid ${cabColor}`,
-                           boxShadow: `0 0 6px ${cabColor}80` 
+                           boxShadow: `0 0 6px ${cabColor}80`
                          }}
                       />
                       <div className="relative z-10" style={{ transform: `rotate(${cab.heading}deg)`, width: '16px', height: '32px' }}>
@@ -147,36 +162,8 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* 5. SAFETY OVERVIEW */}
-        <Card className="bg-surface border-border shadow-sm">
-          <CardHeader className="border-b border-border pb-4 bg-background">
-            <div className="flex items-center text-text-main">
-              <ShieldCheck className="h-5 w-5 mr-2 text-primary" />
-              <CardTitle className="text-base font-extrabold">Fleet Safety Score</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-8 flex items-center justify-between">
-             <div>
-                <p className="text-6xl font-extrabold text-primary mb-2">94<span className="text-2xl text-text-secondary">/100</span></p>
-                <p className="text-sm font-bold text-primary">EXCELLENT SAFETY RATING</p>
-             </div>
-             <div className="space-y-4 w-1/2">
-                <div>
-                   <div className="flex justify-between text-xs font-bold text-text-main mb-1"><span>Over-speeding</span><span className="text-warning">2 Active</span></div>
-                   <div className="w-full bg-border rounded-full h-1.5"><div className="bg-warning h-1.5 rounded-full" style={{width:'15%'}}></div></div>
-                </div>
-                <div>
-                   <div className="flex justify-between text-xs font-bold text-text-main mb-1"><span>Harsh Braking</span><span className="text-text-secondary">0 Active</span></div>
-                   <div className="w-full bg-border rounded-full h-1.5"><div className="bg-primary h-1.5 rounded-full" style={{width:'5%'}}></div></div>
-                </div>
-                <div>
-                   <div className="flex justify-between text-xs font-bold text-text-main mb-1"><span>Critical Incidents</span><span className="text-text-secondary">0 Active</span></div>
-                   <div className="w-full bg-border rounded-full h-1.5"><div className="bg-coral h-1.5 rounded-full" style={{width:'0%'}}></div></div>
-                </div>
-             </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-6">
+
 
         {/* 6. ANALYTICS */}
         <Card className="bg-surface border-border shadow-sm">

@@ -34,6 +34,23 @@ export class MockCabRepository implements ICabRepository {
     return { ...table[index] };
   }
 
+  async batchUpdate(cabs: Array<{
+    cabId: string;
+    status?: any;
+    currentLatitude?: number;
+    currentLongitude?: number;
+    currentSpeed?: number;
+    mileageKm?: number;
+  }>): Promise<void> {
+    const table = this.getTable();
+    for (const update of cabs) {
+      const index = table.findIndex((x: any) => x['cabId'] === update.cabId);
+      if (index !== -1) {
+        table[index] = { ...table[index], ...update };
+      }
+    }
+  }
+
   async delete(id: string): Promise<boolean> {
     const table = this.getTable();
     const index = table.findIndex((x: any) => x['cabId'] === id || x.id === id);
