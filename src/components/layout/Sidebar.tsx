@@ -10,6 +10,7 @@ import {
   FileText,
   UserCog,
   Database,
+  Activity,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import UserProfileModal from '../profile/UserProfileModal';
@@ -18,12 +19,13 @@ const links = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/monitoring', icon: Navigation, label: 'Live Map' },
   { to: '/fleet', icon: Car, label: 'Fleet' },
-  { to: '/telemetry-monitor', icon: Database, label: 'Telemetry Monitor' },
+  { to: '/telemetry-monitor', icon: Activity, label: 'Telemetry Monitor' },
   { to: '/drivers', icon: UserCog, label: 'Drivers' },
   { to: '/passengers', icon: Users, label: 'Passengers' },
   { to: '/events', icon: AlertTriangle, label: 'Safety Events' },
   { to: '/sos', icon: ShieldCheck, label: 'SOS Alerts' },
   { to: '/reports', icon: FileText, label: 'Reports' },
+  { to: '/database', icon: Database, label: 'DB Overview' },
 ];
 
 export default function Sidebar() {

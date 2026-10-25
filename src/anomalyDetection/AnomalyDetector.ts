@@ -1,4 +1,4 @@
-﻿import { DETECTION_THRESHOLDS } from '../config/constants';
+import { DETECTION_THRESHOLDS } from '../config/constants';
 import { EventType, EventSeverity, EventStatus, AlertType, AlertSeverity, AlertStatus, SOSSeverity, SOSStatus, CabSimState } from '../types/enums';
 import { SafetyEvent, Alert, SOSRequest } from '../types/entities';
 import { useSimulationStore } from '../store/simulationStore';
@@ -197,7 +197,7 @@ class AnomalyDetector {
   }
 
   /** Trigger an SOS directly (e.g. from passenger panic button injection) */
-  public triggerSOS(cabId: string, reason: string, severity: SOSSeverity) {
+  public triggerSOS(cabId: string, reason: string, severity: SOSSeverity, persistToBackend: boolean = true) {
     const store = useSimulationStore.getState();
     const cab = store.cabs[cabId];
     if (!cab) return;
@@ -216,8 +216,10 @@ class AnomalyDetector {
       ? cab.driverId
       : `DRV-${String(cabNum).padStart(3, '0')}`;
 
+    const canonicalIncidentId = `EVT-SOS-${uniqueTs}-${sosCounter}`;
+
     const sos: SOSRequest = {
-      sosId: `SOS-${sosCounter}-${uniqueTs}`,
+      sosId: canonicalIncidentId,
       tripId: cab.tripId || 'N/A',
       passengerId: cab.passengerId || 'N/A',
       driverId: safeDriverId,
@@ -230,17 +232,13 @@ class AnomalyDetector {
       createdAt: new Date().toISOString(),
     };
 
-    store.addSOSRequest(sos);
-    store.updateCab(cabId, { state: CabSimState.SOS });
-
-    // Create and persist corresponding SafetyEvent for RDS persistence & AWS IoT publishing
     const sosEvent: SafetyEvent = {
-      eventId: `EVT-SOS-${uniqueTs}`,
+      eventId: canonicalIncidentId,
       cabId,
       driverId: safeDriverId,
       tripId: cab.tripId && cab.tripId !== 'N/A' ? cab.tripId : undefined,
       eventType: 'SOS' as any,
-      severity: EventSeverity.CRITICAL,
+      severity: severity === SOSSeverity.CRITICAL ? EventSeverity.CRITICAL : EventSeverity.HIGH,
       startTime: new Date().toISOString(),
       maxValue: 1,
       status: EventStatus.ACTIVE,
@@ -248,10 +246,20 @@ class AnomalyDetector {
       startLongitude: cab.longitude,
       createdAt: new Date().toISOString(),
     };
-    store.addSafetyEvent(sosEvent);
-    safetyEventService.create(sosEvent).catch((err) => {
-      console.warn('Could not persist SOS safety event:', err);
+
+    store.addSOSRequest(sos);
+    store.updateCab(cabId, {
+      state: CabSimState.SOS,
+      activeEventId: canonicalIncidentId,
+      activeAnomalyType: 'SOS',
     });
+    store.addSafetyEvent(sosEvent);
+    if (persistToBackend) {
+      safetyEventService.create(sosEvent).catch((err) => {
+        console.warn('Could not persist SOS safety event:', err);
+      });
+    }
+
 
     // Also create an EMERGENCY alert for the SOS
     alertCounter++;
@@ -272,30 +280,32 @@ class AnomalyDetector {
 
     console.log(`[SOS TRIGGERED] ${cabId} | ${reason} | ${severity}`);
 
-    // Auto-resolve SOS after 45â€“90 seconds (simulated response)
+    // Auto-resolve SOS after 45–90 seconds (simulated response)
     const resolveDelay = 45000 + Math.random() * 45000;
     setTimeout(() => {
       const currentStore = useSimulationStore.getState();
-      const currentSOS = currentStore.sosRequests.find(s => s.sosId === sos.sosId);
+      const currentSOS = currentStore.sosRequests.find(s => s.sosId === canonicalIncidentId);
       if (currentSOS && currentSOS.status === SOSStatus.ACTIVE) {
-        currentStore.updateSOSStatus(sos.sosId, {
+        currentStore.updateSOSStatus(canonicalIncidentId, {
           status: SOSStatus.RESOLVED,
           resolvedAt: new Date().toISOString(),
-          resolutionNotes: 'Resolved by dispatch team',
+          resolutionNotes: 'Resolved by dispatch team (Simulated Drill)',
           responseTimeSec: Math.round(resolveDelay / 1000),
         });
-        currentStore.resolveSafetyEvent(sosEvent.eventId);
-        // Return cab to normal state
-        const cabNow = currentStore.cabs[cabId];
-        if (cabNow && cabNow.state === CabSimState.SOS) {
+        currentStore.resolveSafetyEvent(canonicalIncidentId);
+        // Return cab to normal state only if no other active SOS remains for this cab
+        const remainingActiveSos = currentStore.sosRequests.filter(
+          s => s.cabId === cabId && s.sosId !== canonicalIncidentId && (s.status === SOSStatus.ACTIVE || s.status === SOSStatus.RESPONDING)
+        );
+        if (remainingActiveSos.length === 0) {
           currentStore.updateCab(cabId, {
             state: CabSimState.ON_TRIP,
             activeAnomalyType: null,
             activeEventId: undefined,
           });
+          this.activeSosCabIds.delete(cabId);
         }
-        this.activeSosCabIds.delete(cabId);
-        console.log(`[SOS RESOLVED] ${sos.sosId} â€” ${cabId}`);
+        console.log(`[SOS RESOLVED] ${canonicalIncidentId} — ${cabId}`);
       }
     }, resolveDelay);
   }
@@ -318,7 +328,7 @@ class AnomalyDetector {
       const store = useSimulationStore.getState();
       const existingActiveSOS = store.sosRequests.find(s => s.cabId === cabId && s.status === SOSStatus.ACTIVE);
       if (!existingActiveSOS) {
-        this.triggerSOS(cabId, 'Multiple critical safety events detected', SOSSeverity.HIGH);
+        this.triggerSOS(cabId, 'Multiple critical safety events detected', SOSSeverity.HIGH, false);
         // Reset counter to prevent immediate re-trigger
         anomState.recentCriticalTimestamps = [];
       }
@@ -331,7 +341,7 @@ class AnomalyDetector {
       if (cab && cab.currentSpeed < 3) {
         const existingActiveSOS = store.sosRequests.find(s => s.cabId === cabId && s.status === SOSStatus.ACTIVE);
         if (!existingActiveSOS) {
-          this.triggerSOS(cabId, 'Possible collision detected â€” harsh braking with sudden stop', SOSSeverity.CRITICAL);
+          this.triggerSOS(cabId, 'Possible collision detected — harsh braking with sudden stop', SOSSeverity.CRITICAL, false);
           anomState.recentCriticalTimestamps = [];
         }
       }

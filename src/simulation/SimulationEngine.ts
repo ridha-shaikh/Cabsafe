@@ -1,4 +1,4 @@
-﻿import { useSimulationStore } from '../store/simulationStore';
+import { useSimulationStore } from '../store/simulationStore';
 import { CHENNAI_ROUTES } from '../data/chennaiRoutes';
 import { MOCK_CABS } from '../data/mockData';
 import { CabSimState, SimulationState, SOSSeverity, TripStatus } from '../types/enums';
@@ -204,8 +204,9 @@ class SimulationEngine {
 
     anomalyDetector.triggerSOS(
       targetCab.cabId,
-      '[SIMULATED DEMO] Passenger panic button triggered â€” Demonstration drill',
-      SOSSeverity.HIGH
+      '[SIMULATED DEMO] Passenger panic button triggered — Demonstration drill',
+      SOSSeverity.HIGH,
+      false // Routine simulated visual drill in client memory; does not pollute production RDS
     );
   }
 

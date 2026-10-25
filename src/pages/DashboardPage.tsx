@@ -1,18 +1,19 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Map, { Marker } from 'react-map-gl';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { StatCard } from '../components/charts/StatCard';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimulationStore, isStaleDemoEvent } from '../store/simulationStore';
 import { useAuthStore } from '../store/authStore';
 import { Car, AlertTriangle, ShieldAlert, Navigation, Wrench, Activity, ShieldCheck, MapPin } from 'lucide-react';
-import { SimulationState, CabSimState } from '../types/enums';
+import { SimulationState, CabSimState, MaintenanceStatus } from '../types/enums';
 import { MAP_CONFIG } from '../config/mapConfig';
 import { isActiveTripCab } from '../utils/fleetUtils';
+import { maintenanceService } from '../services';
 
 export default function DashboardPage() {
-  const { cabs, config } = useSimulationStore();
+  const { cabs, config, sosRequests, safetyEvents, alerts, resolvedEventIds } = useSimulationStore();
   const { user } = useAuthStore();
   const cabList = Object.values(cabs);
   const activeCabsList = useMemo(() => cabList.filter(isActiveTripCab), [cabList]);
@@ -22,10 +23,71 @@ export default function DashboardPage() {
   const username = user?.name || 'User';
 
   const activeCabs = activeCabsList.length;
-  const eventsCount = cabList.filter(c => c.activeEventId).length;
-  const { sosRequests, safetyEvents } = useSimulationStore();
-  const activeSosCount = sosRequests.filter(s => s.status === 'ACTIVE' || s.status === 'RESPONDING').length;
-  const maintenanceCabs = cabList.filter(c => c.state === 'MAINTENANCE').length;
+
+  // Active SOS count: Genuinely active, unresolved SOS unique incidents matching Safety Events and SOS Alerts
+  const activeSosCount = useMemo(() => {
+    const activeIncidentIds = new Set(
+      sosRequests
+        .filter(s => (s.status === 'ACTIVE' || s.status === 'RESPONDING') && !resolvedEventIds.has(s.sosId))
+        .map(s => s.sosId)
+    );
+
+    for (const e of safetyEvents) {
+      if (
+        (e.eventType as string) === 'SOS' &&
+        e.status === 'ACTIVE' &&
+        !e.endTime &&
+        !resolvedEventIds.has(e.eventId) &&
+        !isStaleDemoEvent(e)
+      ) {
+        activeIncidentIds.add(e.eventId);
+      }
+    }
+
+    return activeIncidentIds.size;
+  }, [sosRequests, safetyEvents, resolvedEventIds]);
+
+  // Safety Alerts: Genuine active anomaly count
+  const eventsCount = useMemo(() => {
+    const activeAnomalies = cabList.filter(c => c.activeEventId).length;
+    const activeAlerts = alerts.filter(a => a.status === 'ACTIVE' && a.alertType !== 'SOS').length;
+    const activeNonSosEvents = safetyEvents.filter(e =>
+      (e.eventType as string) !== 'SOS' &&
+      e.status === 'ACTIVE' &&
+      !resolvedEventIds.has(e.eventId) &&
+      !e.endTime &&
+      !isStaleDemoEvent(e)
+    ).length;
+    return Math.max(activeAnomalies, activeAlerts, activeNonSosEvents);
+  }, [cabList, alerts, safetyEvents, resolvedEventIds]);
+
+  const maintenanceVehiclesCount = useMemo(() => {
+    return cabList.filter(c => c.state === 'MAINTENANCE' || (c.state as any) === CabSimState.MAINTENANCE).length;
+  }, [cabList]);
+
+  const [scheduledMaintenanceCount, setScheduledMaintenanceCount] = useState<number>(0);
+  const [inProgressMaintenanceCount, setInProgressMaintenanceCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    maintenanceService.getAll()
+      .then(records => {
+        if (!isMounted) return;
+        const scheduled = records.filter(r => r.status === MaintenanceStatus.SCHEDULED).length;
+        const inProgress = records.filter(r => r.status === MaintenanceStatus.IN_PROGRESS).length;
+        setScheduledMaintenanceCount(scheduled);
+        setInProgressMaintenanceCount(inProgress);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setScheduledMaintenanceCount(0);
+          setInProgressMaintenanceCount(0);
+        }
+      });
+    return () => { isMounted = false; };
+  }, []);
+
+  const totalActiveMaintenanceOrders = scheduledMaintenanceCount + inProgressMaintenanceCount;
 
   const [activities, setActivities] = useState<any[]>([]);
   useEffect(() => {
@@ -74,12 +136,25 @@ export default function DashboardPage() {
       </div>
 
       {/* 2. KPI STRIP */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard title="Active Trips" value={activeCabs} icon={<Navigation className="h-6 w-6" />} variant="sage" />
         <StatCard title="Active Fleet" value={cabList.length} icon={<Car className="h-6 w-6" />} variant="teal" />
         <StatCard title="Safety Alerts" value={eventsCount} icon={<AlertTriangle className="h-6 w-6" />} variant="amber" />
         <StatCard title="Active SOS" value={activeSosCount} icon={<ShieldAlert className="h-6 w-6" />} variant="coral" />
-        <StatCard title="Maintenance" value={maintenanceCabs} icon={<Wrench className="h-6 w-6" />} variant="peach" />
+        <StatCard
+          title="In Maintenance"
+          value={maintenanceVehiclesCount}
+          description="Vehicles in MAINTENANCE state"
+          icon={<Wrench className="h-6 w-6" />}
+          variant="peach"
+        />
+        <StatCard
+          title="Service Orders"
+          value={totalActiveMaintenanceOrders}
+          description={`${scheduledMaintenanceCount} scheduled · ${inProgressMaintenanceCount} in progress`}
+          icon={<Wrench className="h-6 w-6" />}
+          variant="default"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

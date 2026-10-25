@@ -23,7 +23,50 @@ export const MOCK_BOOKINGS: Booking[] = [];
 export const MOCK_SAFETY_EVENTS: SafetyEvent[] = [];
 export const MOCK_ALERTS: Alert[] = [];
 export const MOCK_SOS: SOSRequest[] = [];
-export const MOCK_MAINTENANCE: MaintenanceRecord[] = [];
+export const MOCK_MAINTENANCE: MaintenanceRecord[] = [
+  {
+    maintenanceId: 'MNT-001',
+    cabId: 'CAB-048',
+    serviceType: MaintenanceServiceType.OIL_CHANGE,
+    description: 'Periodic 10,000 km engine oil and filter replacement',
+    serviceDate: '2026-10-15',
+    nextServiceDate: '2027-01-15',
+    mileageAtService: 48200,
+    cost: 3200,
+    mechanicName: 'Ramesh K.',
+    serviceCenter: 'Authorized Service Center - Guindy',
+    status: MaintenanceStatus.SCHEDULED,
+    createdAt: '2026-10-14T08:00:00.000Z',
+  },
+  {
+    maintenanceId: 'MNT-002',
+    cabId: 'CAB-049',
+    serviceType: MaintenanceServiceType.BRAKE_SERVICE,
+    description: 'Front and rear brake pads inspection and replacement',
+    serviceDate: '2026-10-18',
+    nextServiceDate: '2027-04-18',
+    mileageAtService: 52400,
+    cost: 5800,
+    mechanicName: 'Sundar M.',
+    serviceCenter: 'Fleet Maintenance Hub - T. Nagar',
+    status: MaintenanceStatus.IN_PROGRESS,
+    createdAt: '2026-10-17T09:30:00.000Z',
+  },
+  {
+    maintenanceId: 'MNT-003',
+    cabId: 'CAB-050',
+    serviceType: MaintenanceServiceType.FULL_SERVICE,
+    description: 'Comprehensive annual safety inspection and wheel alignment',
+    serviceDate: '2026-10-22',
+    nextServiceDate: '2027-04-22',
+    mileageAtService: 61100,
+    cost: 8500,
+    mechanicName: 'Venkatesh S.',
+    serviceCenter: 'Chennai Central Fleet Depot',
+    status: MaintenanceStatus.SCHEDULED,
+    createdAt: '2026-10-20T11:00:00.000Z',
+  },
+];
 
 // Deterministic seed definitions matching aws-backend/seed.sql
 const DRIVER_NAMES = [

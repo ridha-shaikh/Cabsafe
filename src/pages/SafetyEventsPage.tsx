@@ -1,25 +1,24 @@
-﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import PageContainer from '../components/layout/PageContainer';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
-import { useSimulationStore } from '../store/simulationStore';
+import { useSimulationStore, isStaleDemoEvent } from '../store/simulationStore';
 import { safetyEventService } from '../services';
 import {
   AlertTriangle, Clock, ShieldAlert, CheckCircle2, Navigation,
   FileText, RefreshCw, AlertCircle, Loader2
 } from 'lucide-react';
-import { EventSeverity, EventStatus } from '../types/enums';
+import { EventSeverity, EventStatus, CabSimState } from '../types/enums';
 import { IncidentInvestigationModal } from '../components/safety/IncidentInvestigationModal';
 import { SafetyEvent } from '../types/entities';
 
 export default function SafetyEventsPage() {
-  const { safetyEvents: storeEvents, cabs, resolveSafetyEvent, updateCab, hydrateSafetyEvents } = useSimulationStore();
+  const { safetyEvents: storeEvents, cabs, resolveSafetyEvent, updateCab, hydrateSafetyEvents, resolvedEventIds } = useSimulationStore();
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'CRITICAL'>('ALL');
   const [selectedEvent, setSelectedEvent] = useState<SafetyEvent | null>(null);
   const [apiEvents, setApiEvents] = useState<SafetyEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
 
   // Fetch events from RDS via safetyEventService
   const loadEvents = useCallback(async (isManual = false) => {
@@ -51,6 +50,15 @@ export default function SafetyEventsPage() {
     return () => clearInterval(interval);
   }, [loadEvents]);
 
+  // An event is live if its status is ACTIVE, not manually/persisted resolved, has no endTime, and not a stale demo drill
+  const isEventLive = useCallback((e: SafetyEvent) => {
+    if (resolvedEventIds.has(e.eventId)) return false;
+    if (e.endTime) return false;
+    if (e.status === EventStatus.RESOLVED || (e.status as any) === 'RESOLVED') return false;
+    if (isStaleDemoEvent(e)) return false; // Stale demo drills (> 30 min old) expire, real incidents stay active
+    return e.status === EventStatus.ACTIVE || (e.status as any) === 'ACTIVE';
+  }, [resolvedEventIds]);
+
   // Merge store events and API events, deduplicating by eventId and keeping latest state
   const allEvents = useMemo(() => {
     const map = new Map<string, SafetyEvent>();
@@ -68,10 +76,21 @@ export default function SafetyEventsPage() {
       }
     });
 
-    // 3. Apply locally resolved overrides
+    // 3. Apply resolved overrides
     const list = Array.from(map.values()).map(e => {
-      if (resolvedIds.has(e.eventId)) {
+      const isBackendResolved =
+        e.status === EventStatus.RESOLVED ||
+        (e.status as any) === 'RESOLVED' ||
+        Boolean(e.endTime);
+      const isExpiredDemo = isStaleDemoEvent(e);
+      const isSessionResolved = resolvedEventIds.has(e.eventId);
+
+      if (isBackendResolved || isExpiredDemo) {
         return { ...e, status: EventStatus.RESOLVED };
+      }
+      if (isSessionResolved) {
+        // Backend status and endTime remain unchanged; isSessionResolved flag drives UI presentation
+        return { ...e, isSessionResolved: true } as SafetyEvent;
       }
       return e;
     });
@@ -82,13 +101,7 @@ export default function SafetyEventsPage() {
       const timeB = b.startTime ? new Date(b.startTime).getTime() : 0;
       return timeB - timeA;
     });
-  }, [storeEvents, apiEvents, resolvedIds]);
-
-  // An event is live if its status is ACTIVE and not manually resolved
-  const isEventLive = useCallback((e: SafetyEvent) => {
-    if (resolvedIds.has(e.eventId)) return false;
-    return e.status === EventStatus.ACTIVE || (e.status as any) === 'ACTIVE';
-  }, [resolvedIds]);
+  }, [storeEvents, apiEvents, resolvedEventIds]);
 
   const liveActiveEvents = useMemo(() => allEvents.filter(isEventLive), [allEvents, isEventLive]);
   const criticalEvents = useMemo(() => allEvents.filter(e => e.severity === EventSeverity.CRITICAL || (e.severity as any) === 'CRITICAL'), [allEvents]);
@@ -103,14 +116,14 @@ export default function SafetyEventsPage() {
 
   const handleQuickResolve = (e: React.MouseEvent, eventId: string, cabId: string) => {
     e.stopPropagation();
-    setResolvedIds(prev => new Set(prev).add(eventId));
     resolveSafetyEvent(eventId);
-    // Clear anomaly from cab if this was its active event
+    // Clear anomaly from cab only if this was its specific active event
     const cab = cabs[cabId];
     if (cab?.activeEventId === eventId) {
       updateCab(cabId, {
         activeEventId: undefined,
         activeAnomalyType: null,
+        state: CabSimState.ON_TRIP,
       });
     }
   };
@@ -281,6 +294,15 @@ export default function SafetyEventsPage() {
            </div>
         </CardHeader>
 
+        <div className="px-6 py-2.5 bg-amber-50/80 border-b border-amber-200/70 text-[11px] text-amber-950 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+            <span>
+              <strong>Resolution Notice:</strong> Manual resolutions are tracked in your active operator session. Permanent status updates in AWS RDS require deploying a backend <code className="bg-amber-100/90 text-amber-900 px-1 py-0.5 rounded font-mono text-[10px]">PATCH /events</code> route.
+            </span>
+          </div>
+        </div>
+
         <div className="w-full overflow-x-auto">
           <table className="w-full text-left border-collapse table-auto">
             <thead>
@@ -357,6 +379,10 @@ export default function SafetyEventsPage() {
                         {isLive ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-500 text-white animate-pulse">
                             Active Now
+                          </span>
+                        ) : (event as any).isSessionResolved ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300" title="Resolved in operator session. Permanent RDS update requires backend PATCH route.">
+                            Resolved (Session)
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-700">

@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import PageContainer from '../components/layout/PageContainer';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
@@ -26,11 +26,12 @@ export default function SOSPage() {
 
       anomalyDetector.triggerSOS(
         targetCab.cabId,
-        '[SIMULATED DEMO] Passenger panic button triggered â€” Demonstration drill',
-        SOSSeverity.CRITICAL
+        '[SIMULATED DEMO] Passenger panic button triggered — Demonstration drill',
+        SOSSeverity.CRITICAL,
+        true // Manual test button persists to backend for AWS IoT Core & SNS email testing
       );
 
-      setLastTriggerNotice(`[SIMULATED DEMO] SOS triggered for ${targetCab.cabId}. Published to AWS IoT topic cabsafe/telemetry/${targetCab.cabId} with status="SOS". AWS IoT Rule CabSafeSOSToSNS triggers Amazon SNS email!`);
+      setLastTriggerNotice(`[DELIBERATE AWS INTEGRATION TEST] Manual SOS triggered for ${targetCab.cabId}. Persisted to RDS and published to AWS IoT topic cabsafe/telemetry/${targetCab.cabId} with status="SOS". AWS IoT Rule CabSafeSOSToSNS triggers Amazon SNS email!`);
     } catch (err: any) {
       setLastTriggerNotice(`Error triggering simulated SOS: ${err?.message}`);
     } finally {
@@ -52,13 +53,18 @@ export default function SOSPage() {
       resolvedAt: new Date().toISOString(),
       resolutionNotes: 'Operator verified driver and passenger safety. Incident resolved.',
     });
-    // Return cab to normal state
-    updateCab(cabId, {
-      state: CabSimState.ON_TRIP,
-      activeAnomalyType: null,
-      activeEventId: undefined,
-    });
-    anomalyDetector.clearActiveSos(cabId);
+    // Return cab to normal state only if no other active SOS remains for this cab
+    const remainingActiveSos = sosRequests.filter(
+      s => s.cabId === cabId && s.sosId !== sosId && (s.status === SOSStatus.ACTIVE || s.status === SOSStatus.RESPONDING)
+    );
+    if (remainingActiveSos.length === 0) {
+      updateCab(cabId, {
+        state: CabSimState.ON_TRIP,
+        activeAnomalyType: null,
+        activeEventId: undefined,
+      });
+      anomalyDetector.clearActiveSos(cabId);
+    }
   };
 
   const sortedList = [...sosRequests].reverse();
@@ -75,7 +81,7 @@ export default function SOSPage() {
           className="flex items-center text-xs font-bold"
         >
           <Radio className={`w-3.5 h-3.5 mr-1.5 ${triggering ? 'animate-ping' : ''}`} />
-          {triggering ? 'Publishing to AWS IoT Core...' : 'Test Simulated SOS (Trigger AWS IoT & SNS)'}
+          {triggering ? 'Publishing to AWS IoT Core...' : 'Test Manual SOS (Deliberate AWS IoT & SNS Test)'}
         </Button>
       }
     >

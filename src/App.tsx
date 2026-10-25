@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import React, { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useSimulationStore } from './store/simulationStore';
@@ -21,6 +21,7 @@ import AlertsPage from './pages/AlertsPage';
 import MaintenancePage from './pages/MaintenancePage';
 import ReportsPage from './pages/ReportsPage';
 import TelemetryMonitorPage from './pages/TelemetryMonitorPage';
+import DatabaseOverviewPage from './pages/DatabaseOverviewPage';
 import SettingsPage from './pages/SettingsPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,7 @@ export default function App() {
                   <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/telemetry-monitor" element={<TelemetryMonitorPage />} />
 
+                  <Route path="/database" element={<DatabaseOverviewPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </AppLayout>
