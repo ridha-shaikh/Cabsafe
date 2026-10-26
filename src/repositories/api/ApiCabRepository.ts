@@ -4,7 +4,96 @@ import { getApiBaseUrl } from '../../config/apiConfig';
 
 const BASE_URL = getApiBaseUrl();
 
+/**
+ * Fair telemetry batch selection using Least Recently Synchronized (LRU) priority.
+ * Selects up to `batchSize` items prioritizing vehicles with the oldest last-sync timestamp.
+ * Stable tie-breaking via cabId guarantees deterministic ordering.
+ * Guarantees that active cabs are never starved even when active membership changes dynamically.
+ *
+ * @param items Array of active candidates with cabId
+ * @param lastSyncMap Map of cabId -> timestamp of last sync
+ * @param batchSize Maximum items per batch (default 15)
+ * @param currentTimestamp Current epoch ms or monotonic tick counter
+ * @returns { batch: T[]; updatedSyncMap: Map<string, number> }
+ */
+export function selectLeastRecentlySyncedBatch<T extends { cabId: string }>(
+  items: T[],
+  lastSyncMap: Map<string, number>,
+  batchSize: number = 15,
+  currentTimestamp: number = Date.now()
+): { batch: T[]; updatedSyncMap: Map<string, number> } {
+  if (!items || items.length === 0) {
+    return { batch: [], updatedSyncMap: lastSyncMap };
+  }
+
+  // If the fleet fits within one batch, return all items without truncation
+  if (items.length <= batchSize) {
+    for (const item of items) {
+      lastSyncMap.set(item.cabId, currentTimestamp);
+    }
+    return { batch: items.slice(), updatedSyncMap: lastSyncMap };
+  }
+
+  // Sort candidates by last sync timestamp ascending (oldest/unsynced first).
+  // Tie-break alphabetically by cabId for determinism.
+  const sorted = [...items].sort((a, b) => {
+    const timeA = lastSyncMap.get(a.cabId) ?? 0;
+    const timeB = lastSyncMap.get(b.cabId) ?? 0;
+    if (timeA !== timeB) {
+      return timeA - timeB;
+    }
+    return a.cabId.localeCompare(b.cabId);
+  });
+
+  const batch = sorted.slice(0, batchSize);
+  for (const item of batch) {
+    lastSyncMap.set(item.cabId, currentTimestamp);
+  }
+
+  return { batch, updatedSyncMap: lastSyncMap };
+}
+
+/**
+ * Index-based round-robin batch selection helper (preserved for backward compatibility).
+ */
+export function selectRoundRobinBatch<T>(
+  items: T[],
+  cursor: number,
+  batchSize: number = 15
+): { batch: T[]; nextCursor: number } {
+  if (!items || items.length === 0) {
+    return { batch: [], nextCursor: 0 };
+  }
+
+  if (items.length <= batchSize) {
+    return { batch: items.slice(), nextCursor: 0 };
+  }
+
+  const effectiveCursor = ((cursor % items.length) + items.length) % items.length;
+  const end = effectiveCursor + batchSize;
+
+  let batch: T[];
+  if (end <= items.length) {
+    batch = items.slice(effectiveCursor, end);
+  } else {
+    batch = items.slice(effectiveCursor).concat(items.slice(0, end - items.length));
+  }
+
+  const nextCursor = (effectiveCursor + batch.length) % items.length;
+  return { batch, nextCursor };
+}
+
 export class ApiCabRepository implements ICabRepository {
+  private lastSyncMap: Map<string, number> = new Map();
+
+  public getLastSyncMap(): Map<string, number> {
+    return this.lastSyncMap;
+  }
+
+  public getSyncCursor(): number {
+    return this.lastSyncMap.size;
+  }
+
   async getAll(): Promise<Cab[]> {
     const res = await fetch(`${BASE_URL}/cabs`);
     if (!res.ok) throw new Error(`GET /cabs failed: ${res.status}`);
@@ -47,35 +136,16 @@ export class ApiCabRepository implements ICabRepository {
       mileageKm: data.mileageKm != null ? parseFloat(Number(data.mileageKm).toFixed(2)) : undefined,
     };
 
-    // 1. Try standard PUT /cabs
+    // Synchronize through existing supported GET /cabs endpoint (API Gateway routes to Lambda updateCabsInDb)
     try {
-      const res = await fetch(`${BASE_URL}/cabs`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) return { cabId: id, ...data } as Cab;
-    } catch {
-      // Proceed to active route fallback
-    }
-
-    // 2. Fallback to active POST /events route (configured in API Gateway)
-    try {
-      const postRes = await fetch(`${BASE_URL}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'sync_cabs', eventType: 'TELEMETRY', cabs: [payload] }),
-      });
-      if (postRes.ok) return { cabId: id, ...data } as Cab;
-    } catch {
-      // Proceed to GET fallback
-    }
-
-    // 3. Fallback to active GET /cabs with query param
-    try {
-      await fetch(`${BASE_URL}/cabs?action=sync&cabs=${encodeURIComponent(JSON.stringify([payload]))}`);
-    } catch {
-      // Ignore fallback error
+      const response = await fetch(`${BASE_URL}/cabs?action=sync&cabs=${encodeURIComponent(JSON.stringify([payload]))}`);
+      if (!response.ok) {
+        console.warn(`[ApiCabRepository] update sync returned HTTP ${response.status}: ${response.statusText}`);
+      } else {
+        this.lastSyncMap.set(id, Date.now());
+      }
+    } catch (err: any) {
+      console.warn('[ApiCabRepository] update sync skipped:', err?.message);
     }
 
     return { cabId: id, ...data } as Cab;
@@ -89,6 +159,8 @@ export class ApiCabRepository implements ICabRepository {
     currentSpeed?: number;
     mileageKm?: number;
   }>): Promise<void> {
+    if (!cabs || cabs.length === 0) return;
+
     const cleanList = cabs.map(c => ({
       cabId: c.cabId,
       status: c.status || 'ACTIVE',
@@ -98,39 +170,18 @@ export class ApiCabRepository implements ICabRepository {
       mileageKm: c.mileageKm != null ? parseFloat(Number(c.mileageKm).toFixed(2)) : undefined,
     }));
 
-    // 1. Try standard PUT /cabs
-    try {
-      const res = await fetch(`${BASE_URL}/cabs`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cabs: cleanList }),
-      });
-      if (res.ok) return;
-    } catch {
-      // Proceed to active route fallback
-    }
+    // Prioritize least-recently-synchronized cabs, keeping request within safe URL length limit (<= 15 cabs)
+    const { batch } = selectLeastRecentlySyncedBatch(cleanList, this.lastSyncMap, 15);
 
-    // 2. Fallback to active POST /events route (configured in API Gateway)
+    // Synchronize throttled fleet telemetry through existing supported GET /cabs endpoint
+    // Fair LRU batch of up to 15 vehicles to prevent URL query string overflow
     try {
-      const postRes = await fetch(`${BASE_URL}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'sync_cabs',
-          eventType: 'TELEMETRY',
-          cabs: cleanList,
-        }),
-      });
-      if (postRes.ok) return;
-    } catch {
-      // Proceed to GET fallback
-    }
-
-    // 3. Fallback to active GET /cabs with query param
-    try {
-      await fetch(`${BASE_URL}/cabs?action=sync&cabs=${encodeURIComponent(JSON.stringify(cleanList.slice(0, 15)))}`);
+      const response = await fetch(`${BASE_URL}/cabs?action=sync&cabs=${encodeURIComponent(JSON.stringify(batch))}`);
+      if (!response.ok) {
+        console.warn(`[ApiCabRepository] batchUpdate sync returned HTTP ${response.status}: ${response.statusText}`);
+      }
     } catch (err: any) {
-      console.warn('[ApiCabRepository] batchUpdate fallback failed:', err?.message);
+      console.warn('[ApiCabRepository] batchUpdate sync skipped:', err?.message);
     }
   }
 
