@@ -202,31 +202,49 @@ console.log('\nTEST 8: API Routing, URL Normalization & Least-Recently-Synced (L
 const apiConfigPath = path.join(rootDir, 'src', 'config', 'apiConfig.ts');
 const apiConfigCode = fs.readFileSync(apiConfigPath, 'utf8');
 
-assert(!apiConfigCode.includes("url = `${url}/default`"), 'apiConfig.ts does not append /default to API URL');
-assert(apiConfigCode.includes("url.replace(/\\/default$/, '')"), 'apiConfig.ts strips /default suffix if present');
-assert(apiConfigCode.includes("'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com'"), 'apiConfig.ts uses root invoke URL as default');
+assert(apiConfigCode.includes("'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default'"), 'apiConfig.ts uses confirmed invoke URL with /default as default');
+assert(apiConfigCode.includes("url.replace(/(\\/default)+$/, '/default')"), 'apiConfig.ts collapses duplicate /default suffixes');
+assert(apiConfigCode.includes("url.includes('.execute-api.')"), 'apiConfig.ts guards execute-api stage appending');
 
 // Pure function test for getApiBaseUrl normalization logic
 function normalizeApiUrl(raw) {
-  let url = (raw || 'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com').trim().replace(/\/+$/, '');
-  url = url.replace(/\/default$/, '');
+  let url = (raw || 'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default').trim().replace(/\/+$/, '');
+  url = url.replace(/(\/default)+$/, '/default');
+  if (url.includes('.execute-api.') && !url.endsWith('/default') && !url.includes('/default/')) {
+    url = `${url}/default`;
+  }
   return url;
 }
 
 assert(
   normalizeApiUrl('https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default') ===
-    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com',
-  'normalizeApiUrl strips /default suffix correctly'
+    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+  'normalizeApiUrl preserves confirmed /default invoke URL'
 );
 assert(
   normalizeApiUrl('https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default///') ===
-    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com',
-  'normalizeApiUrl handles trailing slashes and /default correctly'
+    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+  'normalizeApiUrl trims trailing slashes while preserving /default'
+);
+assert(
+  normalizeApiUrl('https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default/default') ===
+    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+  'normalizeApiUrl collapses accidental duplicate /default/default to single /default'
+);
+assert(
+  normalizeApiUrl('https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default/default/default') ===
+    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+  'normalizeApiUrl collapses triplicate /default/default/default to single /default'
 );
 assert(
   normalizeApiUrl('https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com') ===
-    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com',
-  'normalizeApiUrl preserves clean root URL'
+    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+  'normalizeApiUrl appends missing /default stage to execute-api domain'
+);
+assert(
+  normalizeApiUrl('https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/') ===
+    'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+  'normalizeApiUrl appends missing /default stage when trailing slash is present'
 );
 
 const apiCabRepoPath = path.join(rootDir, 'src', 'repositories', 'api', 'ApiCabRepository.ts');
@@ -243,6 +261,16 @@ const { createServer } = await import('vite');
 const viteServer = await createServer({ logLevel: 'silent' });
 
 try {
+  const apiConfigModule = await viteServer.ssrLoadModule('./src/config/apiConfig.ts');
+  assert(
+    apiConfigModule.DEFAULT_API_BASE_URL === 'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+    'Exported production DEFAULT_API_BASE_URL includes /default'
+  );
+  assert(
+    apiConfigModule.getApiBaseUrl() === 'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default',
+    'Exported production getApiBaseUrl() resolves to confirmed URL with /default'
+  );
+
   const apiRepoModule = await viteServer.ssrLoadModule('./src/repositories/api/ApiCabRepository.ts');
   const { selectLeastRecentlySyncedBatch, ApiCabRepository } = apiRepoModule;
 

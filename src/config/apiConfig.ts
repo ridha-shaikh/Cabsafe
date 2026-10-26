@@ -1,16 +1,22 @@
 /**
  * Global API Gateway endpoint configuration for CabSafe.
- * Normalizes HTTP API Gateway endpoints (served from root on the $default stage)
- * and trims trailing slashes and redundant /default suffixes.
+ * Normalizes stage paths (ensuring /default is present for execute-api invoke URLs)
+ * and trims trailing slashes to prevent double-slash URL corruption or duplicate stage suffixes.
  */
 
-export const DEFAULT_API_BASE_URL = 'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com';
+export const DEFAULT_API_BASE_URL = 'https://khn3o7zesa.execute-api.ap-south-1.amazonaws.com/default';
 
 export function getApiBaseUrl(): string {
   const raw = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || DEFAULT_API_BASE_URL;
   let url = raw.replace(/\/+$/, '');
-  // HTTP API Gateway routes (/cabs, /events, /trips, /drivers) are mapped at the root of the $default stage.
-  // Strip trailing /default if present to prevent 404 route misses.
-  url = url.replace(/\/default$/, '');
+
+  // Collapse accidental duplicate /default suffixes if present (e.g. /default/default)
+  url = url.replace(/(\/default)+$/, '/default');
+
+  // If configured with raw API Gateway host without the stage name (/default), append it
+  if (url.includes('.execute-api.') && !url.endsWith('/default') && !url.includes('/default/')) {
+    url = `${url}/default`;
+  }
+
   return url;
 }
